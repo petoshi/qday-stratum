@@ -1,0 +1,103 @@
+name: Release builds
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version embedded in the binary
+        required: true
+        default: dev
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-builds-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x86-64
+            runner: ubuntu-24.04
+            target: linux-amd64
+            binary: qday-stratum
+          - name: Linux ARM64
+            runner: ubuntu-24.04-arm
+            target: linux-arm64
+            binary: qday-stratum
+          - name: Windows x86-64
+            runner: windows-2025
+            target: windows-amd64
+            binary: qday-stratum.exe
+          - name: macOS Intel
+            runner: macos-15-intel
+            target: darwin-amd64
+            binary: qday-stratum
+          - name: macOS Apple Silicon
+            runner: macos-15
+            target: darwin-arm64
+            binary: qday-stratum
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build archive
+        shell: bash
+        env:
+          VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+        run: python3 scripts/package.py --version "$VERSION" --targets '${{ matrix.target }}'
+
+      - name: Verify native executable
+        shell: bash
+        env:
+          VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import os, subprocess, tarfile, tempfile, zipfile
+
+          root = Path("build/dist")
+          archive = next(path for path in root.iterdir() if not path.name.endswith(".sha256"))
+          with tempfile.TemporaryDirectory() as temporary:
+              if archive.suffix == ".zip":
+                  with zipfile.ZipFile(archive) as bundle:
+                      bundle.extractall(temporary)
+              else:
+                  with tarfile.open(archive) as bundle:
+                      bundle.extractall(temporary)
+              binary = next(Path(temporary).rglob("${{ matrix.binary }}"))
+              if os.name != "nt":
+                  binary.chmod(0o755)
+              output = subprocess.check_output([str(binary), "-version"], text=True).strip()
+              expected = os.environ["VERSION"].removeprefix("v")
+              if not output.startswith("qday-stratum " + expected + " "):
+                  raise SystemExit(f"wrong version output: {output}")
+          PY
+
+      - name: Upload archive
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: qday-stratum-${{ matrix.target }}
+          path: |
+            build/dist/*
+          if-no-files-found: error
+          retention-days: 14
+
