@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/petoshi/qday-stratum/internal/bridge"
-	"github.com/petoshi/qday-stratum/internal/nodeapi"
 )
 
 var version = "dev"
@@ -31,7 +30,7 @@ func defaultTokenFile() string {
 func main() {
 	var (
 		listen      = flag.String("listen", "127.0.0.1:3333", "Sia Stratum listen address")
-		nodeURL     = flag.String("node", "http://127.0.0.1:19770", "local QDAY node API URL")
+		nodeURL     = flag.String("node", "", "local QDAY node API URL (default: discover the running wallet)")
 		tokenFile   = flag.String("token-file", defaultTokenFile(), "path to the QDAY api.token file")
 		jobInterval = flag.Duration("job-interval", time.Second, "fresh-job interval for 32-bit GPU nonce loops")
 		showVersion = flag.Bool("version", false, "print version and exit")
@@ -48,7 +47,7 @@ func main() {
 	if err != nil {
 		fatal(fmt.Errorf("read QDAY API token: %w", err))
 	}
-	node, err := nodeapi.New(*nodeURL, string(token))
+	node, err := newDiscoveredNodeClient(*nodeURL, *tokenFile, string(token))
 	if err != nil {
 		fatal(err)
 	}

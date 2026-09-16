@@ -136,7 +136,7 @@ the miner.
   -listen string
         Sia Stratum listen address (default "127.0.0.1:3333")
   -node string
-        local QDAY node API URL (default "http://127.0.0.1:19770")
+        local QDAY node API URL (default: discover the running wallet)
   -token-file string
         path to the QDAY api.token file
   -job-interval duration
@@ -146,6 +146,11 @@ the miner.
 ```
 
 `Ctrl+C` stops the bridge. It does not stop QDAY Wallet or the external miner.
+
+By default, the bridge reads `node.json` beside `api.token`, so it follows the
+random loopback port used by QDAY Wallet, including after a wallet restart. If
+no desktop endpoint exists, it falls back to the standalone node at
+`http://127.0.0.1:19770`. Use `-node` only for a custom local node address.
 
 ## Build
 

@@ -63,6 +63,11 @@ level=INFO msg="Sia Stratum ready" listen=127.0.0.1:3333
 level=INFO msg="new QDAY work" height=... job=... workers=0 difficulty=...
 ```
 
+The bridge automatically reads `node.json` beside `api.token`, including the
+random local API port selected by QDAY Wallet. It follows that file if the
+wallet restarts on another port. A standalone node still uses
+`http://127.0.0.1:19770`. Do not copy a temporary port into the command.
+
 If the listener starts but templates fail, read the reported QDAY error. The
 common causes are a locked wallet, an unsynchronized node or an older QDAY
 binary without Stratum template data.
