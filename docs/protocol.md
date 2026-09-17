@@ -15,10 +15,11 @@ The miner sends:
 {"id":1,"method":"mining.subscribe","params":["gominer"]}
 ```
 
-The bridge returns an empty first extranonce and a zero-byte second extranonce:
+The bridge assigns a four-byte first extranonce and tells the miner to search a
+four-byte second extranonce:
 
 ```json
-{"id":1,"result":[[["mining.set_difficulty","..."],["mining.notify","..."]],"",0],"error":null}
+{"id":1,"result":[[["mining.set_difficulty","..."],["mining.notify","..."]],"01020304",4],"error":null}
 ```
 
 The miner authorizes a worker label:
@@ -56,8 +57,8 @@ is submitted.
   "params":[
     "job-id",
     "<32-byte parent ID>",
-    "<serialized rightmost QDAY transaction>",
-    "",
+    "<23-byte transaction prefix>",
+    "<2-byte transaction suffix>",
     ["<left Merkle root>","<left Merkle root>"],
     "",
     "<compact target>",
@@ -71,16 +72,18 @@ The fields are the Sia Stratum fields in their standard order: job ID,
 `prevhash`, `coinb1`, `coinb2`, Merkle branch, unused version, informational
 compact target, `ntime` and `clean_jobs`.
 
-The bridge uses the final QDAY template transaction as the fixed arbitrary
+The bridge uses the final QDAY template transaction as Sia Stratum's arbitrary
 transaction:
 
 ```text
 transaction = coinb1 || extranonce1 || extranonce2 || coinb2
-            = coinb1
+            = 23 bytes || 4 bytes || 4 bytes || 2 bytes
 ```
 
-Both extranonces are empty. QDAY transactions are signed before template
-construction, so inserting bytes into the transaction would invalidate it.
+The result is a canonical 33-byte empty QDAY mining-work transaction. Its
+eight-byte nonce is deliberately mutable and carries both extranonces. The
+signed payout marker and all user transactions are earlier leaves in the same
+commitment and never change.
 
 Its leaf hash is:
 
@@ -115,19 +118,19 @@ The Sia submission has five string parameters:
   "params":[
     "qday.rig1",
     "job-id",
-    "",
+    "05060708",
     "<8-byte little-endian Unix time>",
     "<8-byte little-endian nonce>"
   ]
 }
 ```
 
-The bridge rejects unknown jobs, duplicate submissions, nonempty extranonces,
-malformed fields and hashes above the exact QDAY target. It accepts miner time
-rolling; QDAY consensus performs the final timestamp check.
+The bridge rejects unknown jobs, duplicate submissions, extranonces of the
+wrong size, a changed timestamp, malformed fields and hashes above the exact
+QDAY target. QDAY consensus performs the final timestamp check.
 
-For a valid hash, the bridge inserts the submitted timestamp and nonce into the
-complete block returned with the original QDAY template, then calls:
+For a valid hash, the bridge reconstructs the final mining-work transaction,
+commitment and complete block, inserts the submitted header nonce, then calls:
 
 ```http
 POST /api/miner/submitblock
@@ -148,6 +151,10 @@ QDAY's mining template contains the normal transaction-aware fields plus:
 {
   "stratum": {
     "block":"<hex-encoded complete QDAY v2 block>",
+    "coinbase1":"<46 hex characters>",
+    "coinbase2":"<4 hex characters>",
+    "extranonce1Size":4,
+    "extranonce2Size":4,
     "merklebranch":["<64 hex characters>"]
   }
 }
@@ -158,8 +165,9 @@ parent-state/payout leaf, the mandatory marker when another transaction follows
 it, and any earlier mempool transactions. The order is exactly the order needed
 by Sia Stratum's rightmost-leaf fold.
 
-This is an API extension. It does not change QDAY consensus, block encoding,
-genesis or P2P behavior.
+At block 9,100 the final work transaction becomes a consensus requirement. The
+bridge accepts only this format and stays idle before activation. The upgrade
+does not change genesis or P2P identity.
 
 ## Other methods
 
@@ -167,4 +175,3 @@ The bridge returns an empty object for `mining.configure` and `true` for
 `mining.extranonce.subscribe` and `mining.suggest_difficulty`. Suggested
 difficulty does not replace the network target because every accepted result in
 solo mode must be a valid QDAY block.
-

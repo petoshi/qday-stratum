@@ -25,22 +25,28 @@ type TemplateTransaction struct {
 
 // StratumTemplate contains the extra data exposed for Sia Stratum bridges.
 type StratumTemplate struct {
-	Block        string   `json:"block"`
-	MerkleBranch []string `json:"merklebranch"`
+	Block           string   `json:"block"`
+	Coinbase1       string   `json:"coinbase1"`
+	Coinbase2       string   `json:"coinbase2"`
+	ExtraNonce1Size uint8    `json:"extranonce1Size"`
+	ExtraNonce2Size uint8    `json:"extranonce2Size"`
+	MerkleBranch    []string `json:"merklebranch"`
 }
 
 // Template is the transaction-aware block candidate returned by QDAY.
 type Template struct {
-	Header            string                `json:"header"`
-	Commitment        string                `json:"commitment"`
-	Transactions      []TemplateTransaction `json:"transactions"`
-	PreviousBlockHash string                `json:"previousblockhash"`
-	LongPollID        string                `json:"longpollid"`
-	Target            string                `json:"target"`
-	Height            uint32                `json:"height"`
-	Timestamp         int64                 `json:"curtime"`
-	Bits              string                `json:"bits"`
-	Stratum           StratumTemplate       `json:"stratum"`
+	Header              string                `json:"header"`
+	Commitment          string                `json:"commitment"`
+	Transactions        []TemplateTransaction `json:"transactions"`
+	PreviousBlockHash   string                `json:"previousblockhash"`
+	LongPollID          string                `json:"longpollid"`
+	Target              string                `json:"target"`
+	Height              uint32                `json:"height"`
+	Timestamp           int64                 `json:"curtime"`
+	Bits                string                `json:"bits"`
+	WorkNonce           uint64                `json:"worknonce"`
+	MempoolTransactions int                   `json:"mempoolTransactions"`
+	Stratum             StratumTemplate       `json:"stratum"`
 }
 
 // Client is an authenticated client for one local QDAY node.

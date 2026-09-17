@@ -3,6 +3,7 @@ package bridge
 import (
 	"bufio"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"io"
@@ -13,6 +14,8 @@ import (
 	"time"
 
 	"github.com/petoshi/qday-stratum/internal/nodeapi"
+	"go.sia.tech/core/consensus"
+	"go.sia.tech/core/types"
 )
 
 type fakeNode struct {
@@ -91,6 +94,15 @@ func TestSiaStratumRoundTrip(t *testing.T) {
 	if string(subscribe.Result) == "null" || string(subscribe.Error) != "null" {
 		t.Fatalf("invalid subscribe response: %+v", subscribe)
 	}
+	var subscription []json.RawMessage
+	if err := json.Unmarshal(subscribe.Result, &subscription); err != nil || len(subscription) != 3 {
+		t.Fatalf("invalid subscription result: %s, %v", subscribe.Result, err)
+	}
+	var extraNonce1 string
+	var extraNonce2Size int
+	if json.Unmarshal(subscription[1], &extraNonce1) != nil || json.Unmarshal(subscription[2], &extraNonce2Size) != nil || len(extraNonce1) != 8 || extraNonce2Size != 4 {
+		t.Fatalf("invalid extranonce assignment: %s", subscribe.Result)
+	}
 	writeRPC(t, conn, map[string]any{"id": 2, "method": "mining.authorize", "params": []string{"rig.one", "x"}})
 	authorize := readWire(t, reader)
 	if string(authorize.Result) != "true" || string(authorize.Error) != "null" {
@@ -114,7 +126,7 @@ func TestSiaStratumRoundTrip(t *testing.T) {
 	writeRPC(t, conn, map[string]any{
 		"id":     3,
 		"method": "mining.submit",
-		"params": []string{"rig.one", jobID, "", ntime, "0000000000000000"},
+		"params": []string{"rig.one", jobID, "00000000", ntime, "0000000000000000"},
 	})
 	submit := readWire(t, reader)
 	if string(submit.Result) != "true" || string(submit.Error) != "null" {
@@ -128,6 +140,23 @@ func TestSiaStratumRoundTrip(t *testing.T) {
 		}
 		if len(block) < 48 || !allZero(block[32:40]) {
 			t.Fatal("bridge submitted a block without the solved nonce")
+		}
+		decoder := types.NewBufDecoder(block)
+		var encodedBlock types.V2Block
+		encodedBlock.DecodeFrom(decoder)
+		if decoder.Err() != nil {
+			t.Fatal(decoder.Err())
+		}
+		decoded := encodedBlock.Cast()
+		envelope, err := consensus.ParseQdayEnvelope(decoded.V2.Transactions[len(decoded.V2.Transactions)-1].ArbitraryData)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assigned, _ := hex.DecodeString(extraNonce1)
+		var wantNonce [8]byte
+		copy(wantNonce[:4], assigned)
+		if envelope.Nonce != binary.LittleEndian.Uint64(wantNonce[:]) {
+			t.Fatalf("submitted work nonce %x does not contain assigned extranonce %x", envelope.Nonce, assigned)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("bridge did not submit solved block to QDAY")

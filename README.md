@@ -30,13 +30,16 @@ One executable. One local port. No pool operator to annoy.
 
 ## What you need
 
-- [QDAY Wallet or Node v0.8.0 or newer](https://github.com/petoshi/qday/releases/latest).
+- [QDAY Wallet or Node v1.0.0 or newer](https://github.com/petoshi/qday/releases/latest).
 - An unlocked and synchronized QDAY wallet. Its built-in CPU miner may remain
   stopped.
 - A miner that speaks the
   [SiaMining Stratum protocol](https://github.com/SiaMining/Stratum/blob/master/Stratum.md).
   The reference setup below uses
-  [gominer](https://github.com/robvanmieghem/gominer).
+  [QDAY gominer](https://github.com/petoshi/qday-gominer/releases/latest).
+
+The bridge issues work only for block 9,100 and later. Before activation it
+stays idle and rejects legacy mining templates.
 
 The bridge never asks for the wallet password or seed phrase. It reads the
 local `api.token`, requests block candidates and submits solved blocks.
@@ -52,7 +55,7 @@ Linux:
 ./qday-stratum \
   -token-file "$HOME/.config/qday/qday-mainnet-d71aebcb687c/api.token"
 
-./gominer \
+./qday-gominer \
   -url stratum+tcp://127.0.0.1:3333 \
   -user qday.rig1
 ```
@@ -63,7 +66,7 @@ macOS:
 ./qday-stratum \
   -token-file "$HOME/Library/Application Support/qday/qday-mainnet-d71aebcb687c/api.token"
 
-./gominer \
+./qday-gominer \
   -url stratum+tcp://127.0.0.1:3333 \
   -user qday.rig1
 ```
@@ -74,7 +77,7 @@ Windows PowerShell:
 .\qday-stratum.exe `
   -token-file "$env:APPDATA\qday\qday-mainnet-d71aebcb687c\api.token"
 
-.\gominer.exe `
+.\qday-gominer.exe `
   -url stratum+tcp://127.0.0.1:3333 `
   -user qday.rig1
 ```
@@ -99,19 +102,20 @@ Read the [complete setup guide](docs/setup.md) before pointing hardware at it.
 
 The wire protocol follows SiaMining Stratum: `mining.subscribe`,
 `mining.authorize`, `mining.set_difficulty`, `mining.notify` and
-`mining.submit`. It deliberately returns an empty `extranonce1` and an
-`extranonce2_size` of zero because the rightmost QDAY transaction is already
-signed. Altering it would create a beautiful hash for an invalid transaction.
+`mining.submit`. The bridge assigns each connection a four-byte
+`extranonce1`; the miner searches a four-byte `extranonce2`. Together they fill
+the nonce of QDAY's compact final mining-work transaction. The payout marker
+and every ordinary transaction remain fixed in the same block.
 
 The protocol path matches gominer's Sia implementation. SiaMining-derived GPU
 miners and hardware that implement the same dialect can use it; vendor firmware
 that invented its own dialect needs its own adapter. See
 [protocol.md](docs/protocol.md) for the exact messages and byte order.
 
-Use one miner process to manage all GPUs on a machine. Separate miners receiving
-the same solo job can search the same nonce range. The bridge publishes a fresh
-timestamped job every second for older GPU miners that search only a 32-bit
-nonce loop.
+Use one miner process to manage all GPUs on a machine when practical. Separate
+connections receive different server extranonces, so they do not repeat the
+same commitment space. The bridge also publishes a fresh timestamped job every
+second for older GPU miners that search only a 32-bit header nonce loop.
 
 ## LAN hardware
 
@@ -166,16 +170,17 @@ macOS Intel and macOS Apple Silicon.
 
 ## What actually happens
 
-The QDAY node chooses the parent, payout, mandatory miner marker and valid
-mempool transactions. It returns the complete block plus the left-side Merkle
-roots needed by a Sia Stratum miner. The bridge uses the final transaction as
-the protocol's fixed arbitrary transaction and sends the target and 80-byte
-work layout to the miner.
+The QDAY node chooses the parent, payout, mandatory payout marker and valid
+mempool transactions. It appends a compact 33-byte mining-work transaction and
+returns the complete block plus the left-side Merkle roots needed by a Sia
+Stratum miner. The bridge divides that final transaction into the standard
+23+4+4+2 byte layout and sends the target and 80-byte work layout to the miner.
 
-When a miner submits a nonce, the bridge reconstructs the header, checks the
-BLAKE2b-256 result against the exact QDAY target, inserts the nonce and submitted
-timestamp into the complete encoded block, and calls QDAY `submitblock`. QDAY
-then performs normal consensus validation and P2P relay.
+When a miner submits work, the bridge reconstructs the final transaction,
+Merkle root and header, checks the BLAKE2b-256 result against the exact QDAY
+target, replaces the compact marker in the complete encoded block, and calls
+QDAY `submitblock`. QDAY then performs normal consensus validation and P2P
+relay.
 
 That is the whole trick. The miner does hashes. The node decides what a block
 means. Nobody gets to mine empty blocks by accident and call it integration.

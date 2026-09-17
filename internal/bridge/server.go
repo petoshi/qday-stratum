@@ -4,6 +4,8 @@ package bridge
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -43,15 +45,18 @@ type Server struct {
 	node nodeClient
 	cfg  Config
 
-	mu        sync.Mutex
-	clients   map[*client]struct{}
-	jobs      map[string]*job
-	jobOrder  []string
-	template  *workTemplate
-	current   *job
-	lastStamp int64
+	mu         sync.Mutex
+	clients    map[*client]struct{}
+	jobs       map[string]*job
+	jobOrder   []string
+	template   *workTemplate
+	current    *job
+	lastStamp  int64
+	extra1Size uint8
+	extra2Size uint8
 
-	sequence atomic.Uint64
+	sequence      atomic.Uint64
+	extraSequence atomic.Uint32
 }
 
 // NewServer constructs a solo bridge server.
@@ -71,12 +76,17 @@ func NewServer(node nodeClient, cfg Config) (*Server, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
 	}
-	return &Server{
+	server := &Server{
 		node:    node,
 		cfg:     cfg,
 		clients: make(map[*client]struct{}),
 		jobs:    make(map[string]*job),
-	}, nil
+	}
+	var seed [4]byte
+	if _, err := rand.Read(seed[:]); err == nil {
+		server.extraSequence.Store(binary.LittleEndian.Uint32(seed[:]))
+	}
+	return server, nil
 }
 
 // Run listens until ctx is cancelled or the listener fails.
@@ -158,6 +168,7 @@ func (s *Server) templateLoop(ctx context.Context) {
 		s.mu.Lock()
 		s.template = parsed
 		s.lastStamp = 0
+		s.extra1Size, s.extra2Size = parsed.extra1Size, parsed.extra2Size
 		s.mu.Unlock()
 		s.publish(time.Now(), true)
 	}
@@ -289,13 +300,25 @@ type client struct {
 	worker     string
 	lastDiff   float64
 	lastJob    uint64
+	extraNonce [4]byte
 
 	submitMu sync.Mutex
 	submits  map[string]struct{}
 }
 
 func newClient(server *Server, conn net.Conn) *client {
-	return &client{server: server, conn: conn, submits: make(map[string]struct{})}
+	c := &client{server: server, conn: conn, submits: make(map[string]struct{})}
+	binary.LittleEndian.PutUint32(c.extraNonce[:], server.extraSequence.Add(1))
+	return c
+}
+
+func (c *client) extraNonceBytes(size uint8) []byte {
+	if size == 0 {
+		return nil
+	} else if size > uint8(len(c.extraNonce)) {
+		return nil
+	}
+	return append([]byte(nil), c.extraNonce[:size]...)
 }
 
 func (c *client) close() {
@@ -333,14 +356,25 @@ func decodeParams(raw json.RawMessage, result any) error {
 func (c *client) handle(ctx context.Context, request rpcRequest) {
 	switch request.Method {
 	case "mining.subscribe":
-		c.subscribed.Store(true)
 		subscription := strconv.FormatInt(time.Now().UnixNano(), 16)
+		c.server.mu.Lock()
+		extra1Size, extra2Size, ready := c.server.extra1Size, c.server.extra2Size, c.server.template != nil
+		c.server.mu.Unlock()
+		if !ready {
+			c.respond(request.ID, nil, rpcFailure(20, "mining work is not ready; reconnect shortly"))
+			return
+		}
+		c.subscribed.Store(true)
 		c.respond(request.ID, []any{
 			[]any{[]any{"mining.set_difficulty", subscription}, []any{"mining.notify", subscription}},
-			"",
-			0,
+			hex.EncodeToString(c.extraNonceBytes(extra1Size)),
+			extra2Size,
 		}, nil)
 	case "mining.authorize":
+		if !c.subscribed.Load() {
+			c.respond(request.ID, false, rpcFailure(25, "subscribe before authorization"))
+			return
+		}
 		var params []string
 		if err := decodeParams(request.Params, &params); err != nil || len(params) < 1 || strings.TrimSpace(params[0]) == "" || len(params[0]) > 256 {
 			c.respond(request.ID, false, rpcFailure(20, "worker name is required"))
@@ -433,7 +467,7 @@ func (c *client) submit(ctx context.Context, request rpcRequest) {
 		c.respond(request.ID, false, rpcFailure(22, "duplicate share"))
 		return
 	}
-	block, hash, err := j.solve("", params[2], params[3], params[4])
+	block, hash, err := j.solve(hex.EncodeToString(c.extraNonceBytes(j.extra1Size)), params[2], params[3], params[4])
 	if err != nil {
 		c.respond(request.ID, false, rpcFailure(23, err.Error()))
 		return

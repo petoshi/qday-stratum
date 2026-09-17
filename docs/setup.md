@@ -5,8 +5,11 @@ go directly to that wallet.
 
 ## 1. Prepare QDAY
 
-Install QDAY Wallet or Node v0.8.0 or newer. Start it and wait until the footer
+Install QDAY Wallet or Node v1.0.0 or newer. Start it and wait until the footer
 reports `SYNCED`.
+
+External SiaMining work starts with block 9,100. The bridge deliberately
+rejects the earlier legacy format.
 
 Create or import the wallet, then unlock it. The bridge requests a fresh payout
 address from the loaded wallet keys whenever QDAY builds a block template. The
@@ -110,8 +113,8 @@ Password: x
 ```
 
 Some dashboards want `stratum+tcp://`; others want only `IP:PORT`. The firmware
-must implement the SiaMining dialect, not Bitcoin Stratum with BLAKE2b selected
-from a menu.
+must implement the SiaMining dialect. Stock Sia firmware that uses four-byte
+pool and miner extranonces matches the QDAY v1.0.0 job layout.
 
 Restrict TCP `3333` to the ASIC address. Do not change QDAY's API from
 `127.0.0.1:19770`, and do not install the API token on the ASIC.
@@ -165,7 +168,7 @@ peer settings if it never synchronizes.
 ### `QDAY node has no Sia Stratum template data; update QDAY`
 
 The node predates the API extension required by this bridge. Install QDAY
-v0.8.0 or newer.
+v1.0.0 or newer.
 
 ### `read QDAY API token: ...`
 
