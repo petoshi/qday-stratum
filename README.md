@@ -38,6 +38,10 @@ One executable. One local port. No pool operator to annoy.
   The reference setup below uses
   [QDAY gominer](https://github.com/petoshi/qday-gominer/releases/latest).
 
+Official QDAY gominer archives currently target Linux x86-64 and ARM64. On
+Windows or macOS, build it from source with the platform OpenCL development
+files, or connect compatible SiaMining hardware instead.
+
 The bridge issues work only for block 9,100 and later. Before activation it
 stays idle and rejects legacy mining templates.
 
@@ -107,7 +111,7 @@ The wire protocol follows SiaMining Stratum: `mining.subscribe`,
 the nonce of QDAY's compact final mining-work transaction. The payout marker
 and every ordinary transaction remain fixed in the same block.
 
-The protocol path matches gominer's Sia implementation. SiaMining-derived GPU
+The protocol path matches QDAY gominer's Sia implementation. SiaMining-derived GPU
 miners and hardware that implement the same dialect can use it; vendor firmware
 that invented its own dialect needs its own adapter. See
 [protocol.md](docs/protocol.md) for the exact messages and byte order.

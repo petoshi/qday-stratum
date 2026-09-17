@@ -75,18 +75,21 @@ If the listener starts but templates fail, read the reported QDAY error. The
 common causes are a locked wallet, an unsynchronized node or an older QDAY
 binary without Stratum template data.
 
-## 4. Connect gominer
+## 4. Connect QDAY gominer
 
-Install a gominer build with Sia Stratum support and the OpenCL driver required
-by the GPU.
+Download [QDAY gominer](https://github.com/petoshi/qday-gominer/releases/latest)
+and install the OpenCL driver required by the GPU. Official archives currently
+target Linux x86-64 and ARM64. Windows and macOS users can build the same source
+with the platform OpenCL development files.
 
 ```sh
-gominer \
+qday-gominer \
   -url stratum+tcp://127.0.0.1:3333 \
   -user qday.rig1
 ```
 
-On Windows, use the same flags with `gominer.exe`.
+On Windows, a locally built executable uses the same flags with
+`qday-gominer.exe`.
 
 `qday.rig1` is a log label. It can be any short nonempty name. QDAY ignores it
 for payment and uses the wallet that created the template.
@@ -150,7 +153,7 @@ The bridge also replaces work immediately when the QDAY parent or mempool
 changes. The node's long poll is the source of that update; the timer only
 refreshes nonce space.
 
-Run one miner process per bridge when possible. A single gominer process can
+Run one miner process per bridge when possible. A single QDAY gominer process can
 manage several GPUs without duplicating its own nonce ranges. Independent
 clients receiving the same solo job may duplicate work.
 
