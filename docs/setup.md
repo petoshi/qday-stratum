@@ -79,8 +79,8 @@ binary without Stratum template data.
 
 Download [QDAY gominer](https://github.com/petoshi/qday-gominer/releases/latest)
 and install the OpenCL driver required by the GPU. Official archives currently
-target Linux x86-64 and ARM64. Windows and macOS users can build the same source
-with the platform OpenCL development files.
+target Windows x86-64, Linux x86-64 and Linux ARM64. macOS users can build the
+same source with the platform OpenCL development files.
 
 ```sh
 qday-gominer \
@@ -88,8 +88,7 @@ qday-gominer \
   -user qday.rig1
 ```
 
-On Windows, a locally built executable uses the same flags with
-`qday-gominer.exe`.
+On Windows, run the downloaded `qday-gominer.exe` with the same flags.
 
 `qday.rig1` is a log label. It can be any short nonempty name. QDAY ignores it
 for payment and uses the wallet that created the template.

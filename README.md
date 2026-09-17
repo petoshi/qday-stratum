@@ -38,8 +38,8 @@ One executable. One local port. No pool operator to annoy.
   The reference setup below uses
   [QDAY gominer](https://github.com/petoshi/qday-gominer/releases/latest).
 
-Official QDAY gominer archives currently target Linux x86-64 and ARM64. On
-Windows or macOS, build it from source with the platform OpenCL development
+Official QDAY gominer archives target Windows x86-64, Linux x86-64 and Linux
+ARM64. On macOS, build it from source with the platform OpenCL development
 files, or connect compatible SiaMining hardware instead.
 
 The bridge issues work only for block 9,100 and later. Before activation it
